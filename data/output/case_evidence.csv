@@ -1,0 +1,9 @@
+case_id,action_id,evidence_label
+CASE-S16-01,ACT-0072,Owner task instruction
+CASE-S16-01,ACT-0075,Agent payment action
+CASE-S16-02,ACT-0076,Agent payment action
+CASE-S16-03,ACT-0073,Owner task instruction
+CASE-S16-03,ACT-0077,Agent payment action
+CASE-S16-03,ACT-0078,Agent payment action
+CASE-S16-04,ACT-0074,Owner task instruction
+CASE-S16-04,ACT-0079,Agent payment action

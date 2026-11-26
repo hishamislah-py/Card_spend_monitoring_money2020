@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Green and Mint theme demo</title>
+  <!-- Theme before first paint: stored choice, else the operating system. -->
+  <script>
+    (function () {
+      var pref = 'system';
+      try { var v = localStorage.getItem('ds-theme'); if (v === 'light' || v === 'dark') pref = v; } catch (e) {}
+      var light = pref === 'light' || (pref === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+    })();
+  </script>
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="components.css" />
+  <style>
+    /* Demo layout only */
+    .app { display: flex; min-height: 100vh; }
+    .sidebar { flex: none; display: flex; flex-direction: column; gap: 2px; }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 4px 8px 16px; color: var(--ds-shell-text-hi); font-weight: var(--ds-weight-bold); }
+    .brand-tile { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--ds-brand-tile-bg); color: var(--ds-brand-tile-fg); }
+    .theme-toggle { margin-top: auto; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--ds-shell-border); border-radius: 8px; }
+    .theme-toggle button { flex: 1; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--ds-shell-text); cursor: pointer; }
+    .theme-toggle button[aria-pressed="true"] { background: var(--ds-shell-active-bg); color: var(--ds-shell-text-hi); box-shadow: inset 0 0 0 1px var(--ds-shell-accent); }
+    main { flex: 1; min-width: 0; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+    .content { padding: 24px 32px; display: grid; gap: 20px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .muted { color: var(--ds-text-secondary); margin: 4px 0 0; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    @media (max-width: 767px) { .app { flex-direction: column; } .sidebar { width: auto; } .content, .page-header { padding-left: 16px; padding-right: 16px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" aria-label="Main">
+      <div class="brand"><span class="brand-tile">S</span><span>Your product</span></div>
+      <div class="sidebar-label">Overview</div>
+      <a class="sidebar-item" href="#" aria-current="page">Overview</a>
+      <div class="sidebar-label">Work</div>
+      <a class="sidebar-item" href="#">Findings</a>
+      <a class="sidebar-item" href="#">Reviews <span class="sidebar-count">14</span></a>
+      <a class="sidebar-item" href="#">Tasks</a>
+      <div class="theme-toggle" role="group" aria-label="Colour theme">
+        <button type="button" data-pref="light" aria-pressed="false">Light</button>
+        <button type="button" data-pref="dark" aria-pressed="false">Dark</button>
+        <button type="button" data-pref="system" aria-pressed="false">System</button>
+      </div>
+    </nav>
+    <main>
+      <header class="page-header">
+        <div><div class="eyebrow">Workspace</div><h1>Overview</h1><p class="muted">Example page built only from the theme kit.</p></div>
+        <button class="btn btn-primary" type="button">Upload document</button>
+      </header>
+      <div class="content">
+        <div class="kpis">
+          <section class="card"><div class="muted">New versions</div><div class="kpi-value">2</div><p class="muted">1 new · 1 updated</p></section>
+          <section class="card"><div class="muted">Potential gaps</div><div class="kpi-value">0</div><span class="badge badge-success">None found</span></section>
+          <section class="card"><div class="muted">Insufficient evidence</div><div class="kpi-value">50</div><span class="badge badge-warning badge-dot">Needs evidence</span></section>
+          <section class="card"><div class="muted">Pending reviews</div><div class="kpi-value">14</div><span class="badge badge-accent badge-dot">7 to review</span></section>
+        </div>
+        <section class="card">
+          <div class="row" style="justify-content: space-between"><h2 class="card-title">Recent items</h2><a href="#">View all</a></div>
+          <table class="table">
+            <thead><tr><th>Item</th><th>Date</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr aria-selected="true"><td>Document A v3</td><td>1 Mar 2027</td><td><span class="badge badge-info">In progress</span></td></tr>
+              <tr><td>Document A v2</td><td>1 Sep 2026</td><td><span class="badge badge-danger">Gap</span></td></tr>
+              <tr><td>Document B v1</td><td>1 Mar 2026</td><td><span class="badge badge-neutral">Not compared</span></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="card">
+          <h2 class="card-title">Controls</h2>
+          <div class="row">
+            <input class="input" placeholder="Reviewer name" aria-label="Reviewer name" />
+            <button class="btn btn-primary" type="button">Approve</button>
+            <button class="btn btn-secondary" type="button">View details</button>
+            <button class="btn" type="button" disabled>Disabled</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script>
+    // Same controller as theme.js, inlined so the demo also works when opened straight from disk (file://).
+    const KEY = 'ds-theme';
+    const media = matchMedia('(prefers-color-scheme: light)');
+    function getPreference() { try { const v = localStorage.getItem(KEY); if (v === 'light' || v === 'dark') return v; } catch {} return 'system'; }
+    function apply(pref) {
+      const theme = pref === 'system' ? (media.matches ? 'light' : 'dark') : pref;
+      const root = document.documentElement;
+      if (root.getAttribute('data-theme') === theme) return;
+      root.classList.add('ds-theme-switching'); root.setAttribute('data-theme', theme);
+      requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('ds-theme-switching')));
+    }
+    function setPreference(pref) { try { pref === 'system' ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, pref); } catch {} apply(pref); }
+    function initTheme() {
+      apply(getPreference());
+      media.addEventListener('change', () => { if (getPreference() === 'system') apply('system'); });
+      addEventListener('storage', (e) => { if (e.key === KEY) { apply(getPreference()); sync(); } });
+    }
+    const buttons = document.querySelectorAll('.theme-toggle button');
+    const sync = () => buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pref === getPreference())));
+    buttons.forEach((b) => b.addEventListener('click', () => { setPreference(b.dataset.pref); sync(); }));
+    initTheme(); sync();
+  </script>
+</body>
+</html>

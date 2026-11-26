@@ -1,0 +1,26 @@
+task_id,agent_id,approved_merchant,max_amount_per_payment,permitted_payment_count,reference,valid_from,valid_to,verified_source,verification_note
+T-100,AG-101,ToolCloud,40.00,1,INV-42,2026-10-12T08:00:00Z,2026-10-12T18:00:00Z,true,SIMULATED – not cryptographic
+T-101,AG-101,ToolCloud,40.00,1,INV-42,2026-10-13T08:00:00Z,2026-10-13T18:00:00Z,true,SIMULATED – not cryptographic
+T-200,AG-101,ToolCloud,60.00,1,LIC-7,2026-10-14T08:00:00Z,2026-10-14T18:00:00Z,true,SIMULATED – not cryptographic
+T-300,AG-101,ToolCloud,30.00,8,SEATS-Q4,2026-10-15T08:00:00Z,2026-10-15T18:00:00Z,true,SIMULATED – not cryptographic
+T-600,AG-101,ToolCloud,50.00,1,REN-2026,2026-10-17T08:00:00Z,2026-10-17T18:00:00Z,true,SIMULATED – not cryptographic
+T-700,AG-101,ToolCloud,45.00,1,INV-70,2026-10-18T08:00:00Z,2026-10-18T18:00:00Z,true,SIMULATED – not cryptographic
+T-800,AG-101,ToolCloud,35.00,1,INV-88,2026-10-19T08:00:00Z,2026-10-19T18:00:00Z,true,SIMULATED – not cryptographic
+T-900,AG-101,MetricsLane,35.00,1,ML-310,2026-10-20T08:00:00Z,2026-10-20T18:00:00Z,false,Not verified – received by forwarded email
+T-1001,AG-101,ToolCloud,40.00,1,INV-501,2026-10-21T08:00:00Z,2026-10-21T18:00:00Z,true,SIMULATED – not cryptographic
+T-1002,AG-101,MetricsLane,30.00,1,DASH-2,2026-10-21T08:00:00Z,2026-10-21T18:00:00Z,true,SIMULATED – not cryptographic
+T-1003,AG-101,ToolCloud,60.00,1,INV-610,2026-10-21T08:00:00Z,2026-10-21T18:00:00Z,true,SIMULATED – not cryptographic
+T-1101,AG-101,DocuForge,80.00,1,DF-311,2026-10-22T08:00:00Z,2026-10-22T18:00:00Z,true,SIMULATED – not cryptographic
+T-1102,AG-101,SeatPilot,60.00,1,SP-204,2026-10-22T08:00:00Z,2026-10-22T18:00:00Z,true,SIMULATED – not cryptographic
+T-1103,AG-101,MetricsLane,50.00,1,ML-415,2026-10-22T08:00:00Z,2026-10-22T18:00:00Z,true,SIMULATED – not cryptographic
+T-1104,AG-101,ToolCloud,40.00,1,INV-512,2026-10-22T08:00:00Z,2026-10-22T18:00:00Z,true,SIMULATED – not cryptographic
+T-1201,AG-101,DocuForge,30.00,1,DF-77,2026-10-23T08:00:00Z,2026-10-23T18:00:00Z,false,Not verified – received by forwarded email
+T-1202,AG-101,SeatPilot,65.00,1,SP-300,2026-10-23T08:00:00Z,2026-10-23T18:00:00Z,true,SIMULATED – not cryptographic
+T-1301,AG-101,SeatPilot,50.00,1,SEAT-9,2026-10-24T08:00:00Z,2026-10-24T18:00:00Z,true,SIMULATED – not cryptographic
+T-1401,AG-101,ToolCloud,60.00,1,INV-640,2026-10-25T08:00:00Z,2026-10-25T18:00:00Z,true,SIMULATED – not cryptographic
+T-1402,AG-101,DocuForge,40.00,1,DF-90,2026-10-25T08:00:00Z,2026-10-25T18:00:00Z,true,SIMULATED – not cryptographic
+T-1501,AG-101,SeatPilot,30.00,3,SP-410,2026-10-26T08:00:00Z,2026-10-26T18:00:00Z,false,Not verified – received by forwarded email
+T-1502,AG-101,ToolCloud,40.00,1,INV-700,2026-10-26T08:00:00Z,2026-10-26T18:00:00Z,false,Not verified – received by forwarded email
+T-1601,AG-101,MetricsLane,40.00,1,ML-600,2026-10-27T08:00:00Z,2026-10-27T18:00:00Z,true,SIMULATED – not cryptographic
+T-1602,AG-101,SeatPilot,35.00,1,SP-610,2026-10-27T08:00:00Z,2026-10-27T18:00:00Z,true,SIMULATED – not cryptographic
+T-1603,AG-101,ToolCloud,30.00,1,INV-720,2026-10-27T08:00:00Z,2026-10-27T18:00:00Z,true,SIMULATED – not cryptographic

@@ -1,0 +1,5 @@
+case_id,run_id,scenario_id,agent_id,task_id,severity,case_type,reason,recommended_action,status,txn_count,total_amount,opened_at,updated_at
+CASE-S16-01,RUN-S16,S16,AG-101,T-1601,HIGH,RULE_MISMATCH,Payment of £55.00 exceeds task T-1601 maximum of £40.00.,Pause agent AG-101 via existing card controls and review task T-1601.,OPEN,1,55.00,2026-10-27T13:00:00Z,2026-10-27T13:00:00Z
+CASE-S16-02,RUN-S16,S16,AG-101,,REVIEW,MISSING_EVIDENCE,No verified owner task is linked to this payment; intent not verifiable.,Confirm intent with the agent owner before further payments.,OPEN,1,22.00,2026-10-27T13:15:00Z,2026-10-27T13:15:00Z
+CASE-S16-03,RUN-S16,S16,AG-101,T-1602,HIGH,RULE_MISMATCH,"2 payments made against task T-1602, which authorises 1.",Pause agent AG-101 via existing card controls and review task T-1602.,OPEN,2,70.00,2026-10-27T13:45:00Z,2026-10-27T13:45:00Z
+CASE-S16-04,RUN-S16,S16,AG-101,T-1603,HIGH,RULE_MISMATCH,Reference INV-721 does not match task T-1603 reference INV-720.,Pause agent AG-101 via existing card controls and review task T-1603.,OPEN,1,30.00,2026-10-27T14:00:00Z,2026-10-27T14:00:00Z

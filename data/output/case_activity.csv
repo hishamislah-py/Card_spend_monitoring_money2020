@@ -1,0 +1,5 @@
+activity_id,case_id,at,kind,detail
+A-0001,CASE-S16-04,2026-10-30T06:15:55Z,ai_summary,Groq · openai/gpt-oss-120b
+A-0002,CASE-S16-04,2026-10-30T06:15:55Z,ai_suggestion,IN_REVIEW · Needs owner confirmation
+A-0003,CASE-S16-04,2026-10-30T06:25:26Z,checklist,Ticked: Confirm the correct invoice reference with the supplier
+A-0004,CASE-S16-04,2026-10-30T06:25:26Z,checklist,Ticked: Check whether the authorised invoice was paid separately

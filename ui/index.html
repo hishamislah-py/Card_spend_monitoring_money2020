@@ -1,0 +1,1304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AG-101 Agent Spend Monitor</title>
+<meta name="color-scheme" content="dark light" />
+<script>
+  (function () {
+    var pref = 'system';
+    try { var v = localStorage.getItem('ds-theme'); if (v === 'light' || v === 'dark') pref = v; } catch (e) {}
+    var light = pref === 'light' || (pref === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
+    document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+  })();
+</script>
+<link rel="stylesheet" href="/styles/theme.css" />
+<link rel="stylesheet" href="/styles/components.css" />
+<style>
+  /* Green & Mint: the page's own names map onto the --ds-* theme tokens (ui/styles/theme.css). */
+  :root {
+    --font: var(--ds-font-sans);
+    --mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    --bg: var(--ds-bg-canvas); --card: var(--ds-bg-surface); --line: var(--ds-border-default); --line-2: var(--ds-border-strong);
+    --soft: var(--ds-bg-sunken);
+    --text: var(--ds-text-primary); --text-2: var(--ds-text-secondary); --text-3: var(--ds-text-tertiary);
+    --blue: var(--ds-text-accent); --blue-fill: var(--ds-fill-strong); --blue-hover: var(--ds-fill-strong-hover);
+    --blue-soft: var(--ds-accent-subtle); --blue-line: var(--ds-accent-border); --blue-mark: var(--ds-accent-indicator);
+    --bar: var(--ds-accent-indicator);
+    --green: var(--ds-badge-success-text); --green-soft: var(--ds-success-subtle); --green-line: var(--ds-success-border);
+    --red: var(--ds-danger); --red-soft: var(--ds-danger-subtle); --red-line: var(--ds-danger-border);
+    --amber: var(--ds-warning); --amber-soft: var(--ds-warning-subtle); --amber-line: var(--ds-warning-border);
+    --grey-soft: var(--ds-bg-neutral-tint); --grey-line: var(--ds-border-default);
+    --mismatch: var(--ds-danger-subtle); --fresh: var(--ds-warning-subtle);
+  }
+  .theme-toggle { position: fixed; left: 16px; bottom: 16px; z-index: 15; display: flex; gap: 4px; padding: 4px; border-radius: 8px;
+                  background: var(--ds-shell-bg); border: 1px solid var(--ds-shell-border); box-shadow: var(--ds-card-shadow); }
+  .theme-toggle button { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ds-shell-text);
+                         font-size: 12.5px; font-weight: var(--ds-weight-semibold); cursor: pointer; }
+  .theme-toggle button:hover { background: var(--ds-shell-hover); }
+  .theme-toggle button[aria-pressed="true"] { background: var(--ds-shell-active-bg); color: var(--ds-shell-text-hi);
+                                              box-shadow: inset 0 0 0 1px var(--ds-shell-accent); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: var(--ds-weight-regular) 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, p { margin: 0; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button, select { font: inherit; color: inherit; }
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; border-radius: 4px; }
+  .mono { font-family: var(--mono); font-size: 12.5px; }
+  .nowrap { white-space: nowrap; }
+  .muted { color: var(--text-3); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 20px 24px 40px; display: flex; flex-direction: column; gap: 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-top: var(--ds-card-top-width) solid var(--ds-card-top-color);
+          border-radius: 12px; box-shadow: var(--ds-card-shadow); padding: 20px 22px; min-width: 0; }
+  .title { color: var(--text-3); font-size: 11.5px; font-weight: var(--ds-weight-bold); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 14px; }
+
+  /* app header */
+  .app-head { display: flex; align-items: center; gap: 12px; }
+  .app-head h1 { font-size: 18px; font-weight: var(--ds-weight-bold); letter-spacing: -.01em; }
+  .app-head .sim { margin-left: auto; color: var(--text-3); font-size: 12.5px; }
+  .live-pill { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; border-radius: 999px; font-size: 12.5px;
+               font-weight: var(--ds-weight-bold); border: 1px solid; }
+  .live-pill.on { background: var(--green-soft); color: var(--green); border-color: var(--green-line); }
+  .live-pill.wait { background: var(--amber-soft); color: var(--amber); border-color: var(--amber-line); }
+  .live-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .live-pill.on .dot { animation: pulse 1.2s ease-in-out infinite alternate; }
+  .live-pill .sim-link { margin-left: 6px; font-weight: var(--ds-weight-semibold); }
+  tr.fresh td { animation: fresh 2s ease-out both; }
+  #toasts { position: fixed; top: 16px; right: 16px; z-index: 20; display: flex; flex-direction: column; gap: 10px; width: 360px; }
+  .toast { background: var(--card); border: 1px solid var(--line-2); border-left: 4px solid var(--amber); border-radius: 12px;
+           padding: 12px 14px; box-shadow: var(--ds-card-shadow); animation: toastin .25s ease-out both; }
+  .toast-HIGH { border-left-color: var(--red); }
+  .toast.out { opacity: 0; transform: translateX(12px); transition: opacity .2s, transform .2s; }
+  @keyframes toastin { from { opacity: 0; transform: translateX(16px); } }
+  .toast-top { display: flex; align-items: center; gap: 8px; }
+  .toast-top strong { font-family: var(--mono); font-size: 13px; }
+  .toast-x { margin-left: auto; border: 0; background: none; font-size: 18px; line-height: 1; color: var(--text-3); cursor: pointer; }
+  .toast p { margin: 6px 0 10px; color: var(--text-2); font-size: 13px; }
+
+  /* buttons and pills */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 8px;
+         border: 1px solid var(--line-2); background: var(--card); font-weight: var(--ds-weight-semibold); cursor: pointer; white-space: nowrap; }
+  .btn:hover:not(:disabled) { background: var(--soft); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-primary { background: var(--blue-fill); border-color: var(--blue-fill); color: var(--ds-on-fill-strong); }
+  .btn-primary:hover:not(:disabled) { background: var(--blue-hover); border-color: var(--blue-hover); }
+  .btn-sm { height: 32px; padding: 0 12px; font-size: 13px; }
+  .pill { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11.5px; font-weight: var(--ds-weight-bold);
+          letter-spacing: .02em; border: 1px solid transparent; white-space: nowrap; }
+  .pill-APPROVED, .pill-NORMAL, .pill-REVIEWED { background: var(--green-soft); color: var(--green); border-color: var(--green-line); }
+  .pill-HIGH { background: var(--red-soft); color: var(--red); border-color: var(--red-line); }
+  .pill-REVIEW, .pill-ESCALATED { background: var(--amber-soft); color: var(--amber); border-color: var(--amber-line); }
+  .pill-IN_REVIEW { background: var(--blue-soft); color: var(--blue); border-color: var(--blue-line); }
+  .pill-DECLINED, .pill-OPEN, .pill-DISMISSED { background: var(--grey-soft); color: var(--text-2); border-color: var(--grey-line); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .chip { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; background: var(--soft);
+          border: 1px solid var(--line); color: var(--text-2); font-size: 11.5px; white-space: nowrap; }
+  .rule { display: block; margin-top: 3px; color: var(--text-3); font-size: 11.5px; }
+
+  /* banner and notices */
+  .banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--amber-line);
+            background: var(--amber-soft); color: var(--text); }
+  .banner .spacer { flex: 1; }
+  .notice { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text-2); }
+
+  /* control bar */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { color: var(--text-3); font-size: 12px; font-weight: var(--ds-weight-semibold); }
+  .select { height: 38px; padding: 0 34px 0 12px; border: 1px solid var(--ds-border-input); border-radius: 8px; background-color: var(--ds-bg-input); cursor: pointer;
+            appearance: none; -webkit-appearance: none;
+            background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%), linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+            background-position: calc(100% - 17px) 16px, calc(100% - 12px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
+  .select:disabled { opacity: .55; cursor: not-allowed; }
+
+
+  /* tables */
+  .scroll { max-height: 620px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .scroll.free { max-height: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { position: sticky; top: 0; z-index: 1; background: var(--ds-table-head); text-align: left; color: var(--text-3); font-size: 11.5px; font-weight: var(--ds-weight-bold);
+       padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .r { text-align: right; }
+  .layer { border-left: 1px solid var(--line-2); }
+  .time-cell { line-height: 1.35; }
+  .time-cell span { display: block; }
+  .time-cell span + span { color: var(--text-3); }
+  .time-cell .ago { font-weight: var(--ds-weight-semibold); color: var(--text); }
+  .time-cell .mono { font-size: 11.5px; }
+  tr.fresh td { animation: fresh 1.6s ease-out both; }
+  @keyframes fresh { from { background: var(--fresh); } to { background: transparent; } }
+  .empty-row td { padding: 28px 10px; text-align: center; color: var(--text-3); }
+  .summary { margin-top: 12px; color: var(--text-2); font-size: 13px; }
+  .case-link { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+
+  .reason-sub { display: block; margin-top: 2px; color: var(--text-3); font-size: 12px; }
+  .card-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 14px; }
+  .card-head .title { margin-bottom: 0; }
+  .head-note { font-size: 12.5px; }
+  .filters { margin-left: auto; display: inline-flex; gap: 6px; }
+  .fchip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2);
+           font-size: 12.5px; font-weight: var(--ds-weight-semibold); cursor: pointer; }
+  .fchip:hover { background: var(--soft); }
+  .fchip[aria-pressed="true"] { background: var(--grey-soft); color: var(--text); border-color: var(--text-3); }
+  .fchip .n { color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .activity-scroll { max-height: calc(100vh - 230px); min-height: 360px; }
+  .activity-table td:nth-child(8) { min-width: 120px; }
+  .filters { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .chip-row { display: inline-flex; gap: 6px; }
+  .merchant-filter { display: inline-flex; align-items: center; gap: 8px; }
+  .select-sm { height: 30px; font-size: 12.5px; padding-right: 30px; background-position: calc(100% - 15px) 12px, calc(100% - 10px) 12px; }
+  .sort { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0; font: inherit; color: inherit;
+          font-weight: var(--ds-weight-bold); cursor: pointer; }
+  .sort:hover { color: var(--text); }
+  .sort-mark { font-size: 9px; color: var(--line-2); }
+  th[aria-sort="ascending"] .sort-mark, th[aria-sort="descending"] .sort-mark { color: var(--blue-mark); }
+
+
+  /* case detail */
+  .back { font-weight: var(--ds-weight-semibold); align-self: flex-start; }
+  .d-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .d-head h2 { font-family: var(--mono); font-size: 18px; font-weight: var(--ds-weight-bold); }
+  .d-meta { color: var(--text-3); }
+  .reason { margin-top: 12px; font-size: 22px; font-weight: var(--ds-weight-bold); line-height: 1.35; letter-spacing: -.01em; }
+  .ai { background: var(--ds-bg-raised); border: 1px solid var(--blue-line); border-left: 3px solid var(--blue-mark); border-radius: 12px; padding: 18px 20px; }
+  .ai-label { display: flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 12px; font-weight: var(--ds-weight-semibold); }
+  .ai-label .ic { color: var(--blue); }
+  .ai-text { margin-top: 8px; font-size: 15px; line-height: 1.6; }
+  .ai ul { margin: 10px 0 0; padding-left: 20px; color: var(--text-2); }
+  .ai-note { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--blue-line); color: var(--text-3); font-size: 12px; }
+  .ic { display: inline-flex; flex: none; }
+  .ic svg { width: 14px; height: 14px; }
+
+  /* case tabs */
+  .case-head { padding-bottom: 0; }
+  .tabs { display: flex; gap: 4px; margin-top: 16px; border-top: 1px solid var(--line); }
+  .tab { padding: 12px 14px 11px; color: var(--text-2); font-weight: var(--ds-weight-semibold); border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); text-decoration: none; }
+  .tab[aria-selected="true"] { color: var(--blue); border-bottom-color: var(--ds-focus-ring); }
+  .tab-panel { display: flex; flex-direction: column; gap: 20px; }
+
+  /* analyst tab */
+  .analyst { display: grid; grid-template-columns: minmax(0, 60fr) minmax(0, 40fr); gap: 24px; align-items: start; }
+  @media (max-width: 1100px) { .analyst { grid-template-columns: minmax(0, 1fr); } }
+  .col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .ai-btn { gap: 6px; color: var(--blue); border-color: var(--blue-line); margin-left: auto; }
+  .ai-btn .ic svg { width: 13px; height: 13px; }
+  .suggestion { margin-bottom: 14px; padding: 12px 14px; }
+  .suggestion .ai-text { font-size: 14px; margin-top: 6px; }
+  .suggestion-msg { margin-bottom: 14px; }
+  .suggestion .ai-label strong { color: var(--blue); }
+  .ai-tag { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; padding: 0 6px; height: 18px; border-radius: 999px;
+            background: var(--blue-soft); border: 1px solid var(--blue-line); color: var(--blue); font-size: 11px; font-weight: var(--ds-weight-semibold);
+            vertical-align: middle; }
+  .ai-tag .ic svg { width: 10px; height: 10px; }
+  .link-btn { border: 0; background: none; padding: 0; color: var(--blue); font: inherit; font-weight: var(--ds-weight-semibold); cursor: pointer; }
+  .link-btn:hover { text-decoration: underline; }
+  .seg-status { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; }
+  .seg-status button { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card);
+                       color: var(--text-2); font-weight: var(--ds-weight-semibold); cursor: pointer; }
+  .seg-status button[aria-checked="true"] { background: var(--blue-soft); border-color: var(--blue-mark); color: var(--blue); }
+  .field.stack { margin-bottom: 14px; }
+  .field.stack .select { width: 100%; max-width: 360px; }
+  .req { color: var(--amber); font-weight: var(--ds-weight-semibold); }
+  .textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--ds-border-input); border-radius: 8px; background: var(--ds-bg-input);
+             color: var(--text); font: inherit; resize: vertical; }
+  .textarea:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .hint { color: var(--text-3); font-size: 12.5px; }
+  .checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .checklist label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+  .checklist input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--ds-accent); }
+  .suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .suggest .fchip { height: auto; min-height: 30px; padding: 5px 12px; text-align: left; }
+  .thread { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .thread .q { font-weight: var(--ds-weight-semibold); margin-bottom: 6px; }
+  .thread .q::before { content: "Q  "; color: var(--text-3); font-family: var(--mono); font-size: 12px; }
+  .thread .a.ai { padding: 12px 14px; }
+  .thread .ai-text { font-size: 14px; }
+  .a-foot { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; margin-top: 12px;
+            padding-top: 10px; border-top: 1px solid var(--blue-line); }
+  .a-foot .ai-note { margin: 0; padding: 0; border: 0; }
+  .ask-row { display: flex; gap: 10px; align-items: flex-start; }
+  .ask-row .btn { flex: none; }
+  .notes { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .notes li { padding-top: 12px; border-top: 1px solid var(--line); }
+  .note-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--text-3); font-size: 12px; margin-bottom: 4px; }
+  .from-ai { gap: 4px; color: var(--blue); border-color: var(--blue-line); background: var(--blue-soft); }
+  .from-ai .ic svg { width: 11px; height: 11px; }
+  .notes p { white-space: pre-wrap; }
+  .activity { list-style: none; margin: 0; padding: 0; }
+  .act { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding-bottom: 14px; }
+  .act::before { content: ""; position: absolute; left: 13px; top: 26px; bottom: 0; width: 1px; background: var(--line-2); }
+  .act:last-child::before { display: none; }
+  .act > .ic { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--soft);
+               border: 1px solid var(--line); color: var(--text-2); }
+  .act-ai_summary > .ic, .act-ai_question > .ic, .act-ai_suggestion > .ic { color: var(--blue); background: var(--blue-soft); border-color: var(--blue-line); }
+  .act-status_changed > .ic { color: var(--amber); }
+  .act-checklist > .ic { color: var(--green); }
+  .act-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .act-top .mono { font-size: 11.5px; }
+  .act-detail { margin-top: 2px; color: var(--text-2); font-size: 13px; overflow-wrap: anywhere; }
+  .facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; margin: 0; }
+  .facts dt { color: var(--text-3); font-size: 12.5px; }
+  .facts dd { margin: 0; font-weight: var(--ds-weight-semibold); }
+  .ai-failed { margin-top: 8px; display: flex; align-items: center; gap: 12px; }
+  .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 1100px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+  .cmp td.mm { background: var(--mismatch); color: var(--red); font-weight: var(--ds-weight-semibold); }
+  .cmp td:first-child { color: var(--text-3); white-space: nowrap; }
+  .no-task { padding: 14px 16px; border-radius: 10px; background: var(--amber-soft); border: 1px solid var(--amber-line); }
+  .no-task strong { color: var(--amber); }
+  .signals { display: flex; flex-direction: column; gap: 8px; }
+  .signal { display: flex; align-items: baseline; gap: 10px; }
+  .signal .chip { flex: none; min-width: 140px; justify-content: center; font-weight: var(--ds-weight-semibold); color: var(--text); }
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li { position: relative; padding: 0 0 16px 22px; }
+  .timeline li::before { content: ""; position: absolute; left: 5px; top: 14px; bottom: 0; width: 1px; background: var(--line-2); }
+  .timeline li:last-child::before { display: none; }
+  .timeline li::after { content: ""; position: absolute; left: 0; top: 5px; width: 11px; height: 11px; border-radius: 50%; background: var(--card);
+                        border: 2px solid var(--line-2); }
+  .ev-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .src { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11px; font-weight: var(--ds-weight-bold);
+         border: 1px solid var(--line-2); color: var(--text-2); background: var(--card); }
+  .src-owner { background: var(--green-soft); color: var(--green); border-color: var(--green-line); }
+  .src-external { background: var(--amber-soft); color: var(--amber); border-color: var(--amber-line); }
+  .ev-quote { margin-top: 5px; }
+  .ev-label { margin-top: 3px; color: var(--text-3); font-size: 12px; }
+  .ai-chip { margin-top: 8px; padding: 8px 12px; border-radius: 8px; background: var(--blue-soft); border: 1px solid var(--blue-line); font-size: 12.5px; }
+  .ai-chip strong { color: var(--blue); }
+  .ai-chip .by { color: var(--text-3); font-size: 11.5px; margin-top: 2px; }
+  .rec { padding: 14px 16px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); }
+  .review { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .review-note { margin-top: 8px; color: var(--text-3); font-size: 12.5px; }
+  .review-msg { margin-top: 8px; color: var(--amber); font-size: 13px; font-weight: var(--ds-weight-semibold); }
+  .skel { height: 12px; border-radius: 4px; background: var(--grey-soft); margin-top: 10px; animation: pulse 1.1s ease-in-out infinite alternate; }
+  @keyframes pulse { from { opacity: .4; } to { opacity: 1; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toasts" aria-live="polite"></div>
+<div class="theme-toggle" role="group" aria-label="Colour theme">
+  <button type="button" data-pref="light" aria-pressed="false">Light</button>
+  <button type="button" data-pref="dark" aria-pressed="false">Dark</button>
+  <button type="button" data-pref="system" aria-pressed="false">System</button>
+</div>
+<script type="module">
+  import { initTheme, setPreference, getPreference } from "/styles/theme.js";
+  const buttons = document.querySelectorAll(".theme-toggle button");
+  const sync = () => buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.pref === getPreference())));
+  buttons.forEach(b => b.addEventListener("click", () => { setPreference(b.dataset.pref); sync(); }));
+  addEventListener("storage", e => { if (e.key === "ds-theme") sync(); });
+  initTheme(); sync();
+</script>
+
+<script>
+"use strict";
+
+// ---------------------------------------------------------------- labels
+const SIGNAL_LABEL = {
+  COUNT_EXCEEDED: "Count exceeded", DUPLICATE_REFERENCE: "Duplicate reference", BURST_VS_HISTORY: "Burst vs history",
+  MERCHANT_MISMATCH: "Merchant mismatch", AMOUNT_EXCEEDS_TASK: "Amount over task", OUTSIDE_TASK_WINDOW: "Outside task window",
+  REFERENCE_MISMATCH: "Reference mismatch", NO_TASK: "No task", TASK_NOT_FOUND: "Task not found", TASK_UNVERIFIED: "Task unverified",
+};
+const RULE_LABEL = {
+  MERCHANT_NOT_ALLOWED: "Merchant not allowed", MAX_PER_PAYMENT_EXCEEDED: "Over max per payment",
+  DAILY_CAP_EXCEEDED: "Over daily cap", HOURLY_COUNT_EXCEEDED: "Over hourly count",
+};
+const CASE_TYPE = { RULE_MISMATCH: "Rule mismatch", BEHAVIOUR_REVIEW: "Behaviour review", MISSING_EVIDENCE: "Missing evidence" };
+const SOURCE = { owner: ["Owner", "src-owner"], agent: ["Agent", ""], external: ["External", "src-external"] };
+const ASSESSMENT = { POSSIBLE_INJECTED_INSTRUCTION: "Possible injected instruction", NO_INSTRUCTION_DETECTED: "No instruction detected",
+                     UNCLEAR: "Unclear" };
+const FALLBACK = { timeout: "timeout", rate_limited: "rate limited", api_error: "service error", invalid_output: "invalid output" };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// ---------------------------------------------------------------- helpers
+const $ = (sel, root = document) => root.querySelector(sel);
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat(Infinity)) {
+    if (c === null || c === undefined || c === false) continue;
+    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
+const enc = encodeURIComponent;
+const pl = (n, one, many = one + "s") => (n === 1 ? one : many);
+const gbp = s => `£${Number(s).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const day = ts => (ts || "").slice(0, 10);
+const time = ts => (ts || "").slice(11, 19);
+const hm = ts => (ts || "").slice(11, 16);
+const uniq = arr => [...new Set(arr)];
+function dateLabel(d) {
+  const [y, m, dd] = d.slice(0, 10).split("-");
+  return `${Number(dd)} ${MONTHS[Number(m) - 1]} ${y}`;
+}
+const pill = value => h("span", { class: `pill pill-${value}` }, value.replace(/_/g, " "));
+const signalChip = code => h("span", { class: "chip", title: code }, SIGNAL_LABEL[code] || code);
+// Cases are shown by their neutral alert reference; the internal case_id stays in the URL.
+const refOf = id => ((S.alerts.find(a => a.case_id === id) || S.cases.find(c => c.case_id === id)
+                      || S.lv.cases.find(c => c.case_id === id) || {}).alert_ref) || id;
+const caseLink = id => h("a", { class: "case-link", href: `#case/${enc(id)}`, "data-key": `case-${id}` }, refOf(id));
+// Engine evidence labels are shown as-is, except the supporting-evidence label, which is reworded in plain terms.
+const evidenceLabel = l => (/^Supporting evidence/.test(l) ? "Supporting evidence only – intent not established" : l);
+
+// ---------------------------------------------------------------- state
+const S = {
+  scenarios: [], scenario: "S2", mode: "controls_plus_monitoring", delay: 600,
+  feed: [], cases: [], overview: null, finished: false, alerts: [], scenarioPayments: [], alertFilter: "ALL", alertMerchant: "ALL", alertSort: { key: "time", dir: "desc" },
+  running: false, total: 0, source: null, error: null, notice: null,
+  route: { kind: "replay" }, replayIndex: null, details: {}, ai: {}, missing: new Set(),
+  analyst: {}, analystMsg: {}, drafts: {}, qa: {}, suggest: {},
+  lv: { status: "off", source: null, tasks: [], payments: [], cases: [], totals: null },
+  fresh: new Map(),
+};
+
+// ---------------------------------------------------------------- API
+async function api(path, opts = {}) {
+  let res;
+  try {
+    res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  } catch (e) {
+    S.error = "Can’t reach the monitoring server. Check that server.py is running, then retry.";
+    render();
+    throw Object.assign(new Error("offline"), { offline: true });
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(body.error || `The server returned an error (HTTP ${res.status}).`), { status: res.status });
+  if (S.error && S.error.startsWith("Can’t reach")) { S.error = null; render(); }
+  return body;
+}
+function showError(e) {
+  if (e && e.offline) return;  // the offline banner is already showing
+  S.error = (e && e.message) || "Something went wrong.";
+  render();
+}
+
+// ---------------------------------------------------------------- loading
+async function loadScenarios() {
+  S.scenarios = (await api("/api/scenarios")).scenarios;
+  if (!S.scenarios.some(s => s.scenario_id === S.scenario) && S.scenarios.length) S.scenario = S.scenarios[0].scenario_id;
+}
+async function loadFeed() {
+  S.feed = (await api("/api/feed")).transactions;
+  S.finished = S.feed.length > 0;
+  if (S.feed.length) {
+    S.scenario = S.feed[0].scenario_id;
+  }
+}
+async function loadCases() {
+  S.cases = (await api("/api/cases")).cases;
+  render();
+}
+async function loadAlerts() {  // every scenario's alerts and payments, computed by the server without replaying
+  const r = await api("/api/alerts");
+  S.alerts = r.alerts;
+  S.scenarioPayments = r.payments;
+  render();
+}
+async function loadOverview() {
+  S.overview = await api("/api/overview");
+  render();
+}
+let casesQueued = false;
+function refreshCasesSoon() {  // coalesces case refreshes while payments stream in
+  if (casesQueued) return;
+  casesQueued = true;
+  setTimeout(() => { casesQueued = false; loadCases().catch(showError); }, 150);
+}
+async function loadDetail(id) {
+  try {
+    S.details[id] = await api(`/api/cases/${enc(id)}`);
+    S.missing.delete(id);
+  } catch (e) {
+    if (e.status === 404 && await reloadCase(id)) return;  // the replay's done handler loads it again
+    if (e.status === 404) S.missing.add(id); else showError(e);
+  }
+  render();
+}
+const polling = new Set();
+function watchAi(id) {  // polls the AI summary every 1.5 s until it is ready or has failed
+  if (polling.has(id)) return;
+  polling.add(id);
+  const tick = async () => {
+    if (S.route.kind !== "case" || S.route.id !== id) { polling.delete(id); return; }
+    try {
+      const v = await api(`/api/cases/${enc(id)}/ai`);
+      S.ai[id] = v;
+      render();
+      if (v.ai_status === "pending") { setTimeout(tick, 1500); return; }
+    } catch (e) {
+      if (e.offline) { setTimeout(tick, 3000); return; }
+    }
+    polling.delete(id);
+  };
+  tick();
+}
+async function retryAi(id) {
+  try {
+    S.ai[id] = await api(`/api/cases/${enc(id)}/ai/retry`, { method: "POST" });
+  } catch (e) { showError(e); return; }
+  render();
+  watchAi(id);
+}
+
+// ---------------------------------------------------------------- actions
+function clearRun() {
+  S.feed = []; S.cases = []; S.finished = false; S.total = 0;
+  S.details = {}; S.ai = {}; S.missing.clear();
+  S.analyst = {}; S.analystMsg = {}; S.drafts = {}; S.qa = {}; S.suggest = {};
+}
+function runReplay({ delay = S.delay, then = null, otherwise = null } = {}) {
+  if (S.running) { if (otherwise) otherwise(); return; }
+  const sid = S.scenario, mode = S.mode;
+  S.error = null; S.notice = null;
+  clearRun();
+  S.running = true;
+  render();
+  api(`/api/compare?scenario=${enc(sid)}`).then(c => { S.total = c.per_transaction.length; render(); }).catch(() => {});
+
+  const src = new EventSource(`/api/replay/stream?scenario=${enc(sid)}&mode=${mode}&delay_ms=${delay}`);
+  S.source = src;
+  let received = false;
+  const end = () => { src.close(); if (S.source === src) S.source = null; S.running = false; };
+  src.addEventListener("transaction", e => {
+    received = true;
+    const t = JSON.parse(e.data);
+    S.feed.push(t);
+    S.fresh.set(t.txn_id, Date.now());
+    const caseId = t.agent_monitoring && t.agent_monitoring.case_id;
+    if (caseId) {
+      refreshCasesSoon();
+      if (S.route.kind === "case" && S.route.id === caseId) loadDetail(caseId);
+    }
+    render();
+  });
+  src.addEventListener("done", () => {
+    end();
+    S.finished = true;
+    render();
+    Promise.all([loadOverview(), loadCases(), loadAlerts()]).catch(showError);
+    if (S.route.kind === "case") loadDetail(S.route.id);
+    if (S.route.kind === "case" && S.route.tab === "analyst") loadAnalyst(S.route.id);
+    if (S.route.kind === "case") watchAi(S.route.id);
+    if (then) then();
+  });
+  src.addEventListener("stopped", () => {
+    end();
+    S.notice = "The replay was stopped by a reset.";
+    render();
+    if (otherwise) otherwise();
+  });
+  src.onerror = () => {
+    if (S.source !== src) return;
+    end();
+    S.error = received ? "The connection to the replay stream was lost. Run the replay again."
+                       : "The replay couldn’t start. Another replay may already be running; wait for it to finish or press Reset.";
+    render();
+    loadOverview().catch(() => {});
+    if (otherwise) otherwise();
+  };
+}
+
+// The server keeps only the latest replay. If an alert's case is no longer loaded (a reset, another replay or an
+// AI warm-up replaced it), replay that alert's scenario instantly so the case exists again, keeping the analyst's
+// question thread and unsaved form. Resolves true when the case is back; at most once per alert every 15 seconds.
+let recovering = null;
+const recoveredAt = {};
+function reloadCase(id) {
+  const alert = S.alerts.find(x => x.case_id === id);
+  if (!alert || S.running || Date.now() - (recoveredAt[id] || 0) < 15000) return Promise.resolve(false);
+  if (recovering) return recovering;
+  recoveredAt[id] = Date.now();
+  const keep = { qa: S.qa[id], draft: S.drafts[id] };
+  S.scenario = alert.scenario_id;
+  S.mode = "controls_plus_monitoring";
+  recovering = new Promise(resolve => {
+    runReplay({ delay: 0, then: () => resolve(true), otherwise: () => resolve(false) });
+    S.notice = `Reloading ${refOf(id)}…`;
+    render();
+  }).then(ok => {
+    recovering = null;
+    if (keep.qa) S.qa[id] = keep.qa;
+    if (keep.draft) S.drafts[id] = keep.draft;
+    S.notice = null;
+    render();
+    return ok;
+  });
+  return recovering;
+}
+
+// ---------------------------------------------------------------- analyst actions
+// Analyst actions change review records only (status, disposition, checklist, notes); never payments.
+async function loadAnalyst(id) {
+  try {
+    S.analyst[id] = await api(`/api/cases/${enc(id)}/analyst`);
+    delete S.analystMsg[id];
+    // AI fills in the review form for every alert the analyst hasn't started on; nothing is saved until they confirm.
+    const dr = S.drafts[id];
+    if (!S.suggest[id] && !(dr && dr.touched)) suggestReview(id);
+  } catch (e) {
+    if (e.offline) return;
+    if (e.status === 404 && await reloadCase(id)) return;  // the replay's done handler loads it again
+    if (e.status === 404) S.missing.add(id);
+    S.analystMsg[id] = e.status === 409 ? "Analyst tools are paused while a replay runs. They come back when it finishes."
+                                        : e.message;
+  }
+  render();
+}
+function applyAnalyst(id, view) {
+  S.analyst[id] = view;
+  delete S.analystMsg[id];
+  if (view.case) {
+    if (S.details[id]) S.details[id].case = Object.assign({}, S.details[id].case, view.case);
+    for (const list of [S.cases, S.alerts, S.lv.cases]) {
+      const row = list.find(x => x.case_id === id);
+      if (row) row.status = view.case.status;
+    }
+  }
+}
+async function analystPost(id, path, body, retried = false) {
+  try {
+    const view = await api(`/api/cases/${enc(id)}${path}`, { method: "POST", body: JSON.stringify(body) });
+    applyAnalyst(id, view);
+    render();
+    return view;
+  } catch (e) {
+    if (e.offline) return null;
+    if (e.status === 404 && !retried && await reloadCase(id)) return analystPost(id, path, body, true);
+    S.analystMsg[id] = e.status === 409 ? "A replay is running. Try again when it finishes." : e.message;
+    render();
+    return null;
+  }
+}
+async function saveReview(id) {
+  const d = draft(id), sug = (S.suggest[id] || {}).result;
+  const fromAi = !!(d.aiFilled && sug && d.status === sug.status && (d.disposition || null) === (sug.disposition || null));
+  const noteSource = d.aiFilled && sug && (d.note || "").trim() === sug.note ? "ai_suggestion" : "analyst";
+  const view = await analystPost(id, "/review", { status: d.status, disposition: d.disposition || null, note: d.note || null,
+                                                 ai_suggested: fromAi, note_source: noteSource });
+  if (view) {
+    S.drafts[id] = { status: view.review.status, disposition: view.review.disposition, note: "", noteText: d.noteText, saved: true,
+                     touched: true, question: d.question };
+    loadOverview().catch(() => {});
+    render();
+  }
+}
+async function addNote(id, text, source = "analyst") {
+  const view = await analystPost(id, "/notes", { text, source });
+  if (view && source === "analyst") { draft(id).noteText = ""; render(); }
+  return view;
+}
+async function askAi(id, question) {
+  question = question.trim().replace(/\s+/g, " ");
+  if (!question) return;
+  const thread = S.qa[id] || (S.qa[id] = []);
+  const item = { question, pending: true };
+  thread.push(item);
+  draft(id).question = "";
+  render();
+  const ask = () => api(`/api/cases/${enc(id)}/ai/ask`, { method: "POST", body: JSON.stringify({ question }) });
+  try {
+    try {
+      Object.assign(item, await ask());
+    } catch (e) {
+      if (e.status !== 404 || !(await reloadCase(id))) throw e;
+      Object.assign(item, await ask());  // the case is loaded again; ask once more
+    }
+  } catch (e) {
+    item.error = e.status === 409 ? "A replay is running. Ask again when it finishes." : e.offline ? "Can’t reach the server." : e.message;
+  }
+  item.pending = false;
+  render();
+  loadAnalyst(id);
+}
+async function suggestReview(id) {
+  S.suggest[id] = { pending: true };
+  render();
+  let result;
+  try {
+    result = await api(`/api/cases/${enc(id)}/ai/suggest-review`, { method: "POST", body: "{}" });
+  } catch (e) {
+    if (e.status === 404 && await reloadCase(id)) {  // the case is loaded again; recommend once more
+      delete S.suggest[id];
+      return suggestReview(id);
+    }
+    S.suggest[id] = { error: e.status === 409 ? "A replay is running. Try again when it finishes."
+                                              : e.offline ? "Can’t reach the server." : e.message };
+    render();
+    return;
+  }
+  if (result.fallback_reason) {
+    S.suggest[id] = { fallback: result.fallback_reason };
+  } else {
+    S.suggest[id] = { result };
+    const dr = draft(id);
+    Object.assign(dr, { status: result.status, disposition: result.disposition || "", note: result.note, aiFilled: true, saved: false });
+  }
+  render();
+  loadAnalyst(id);  // the suggestion is logged in the activity trail
+}
+function clearSuggestion(id) {
+  const review = S.analyst[id].review;
+  Object.assign(draft(id), { status: review.status, disposition: review.disposition || "", note: "", aiFilled: false, touched: true });
+  render();
+}
+function draft(id) {
+  const review = (S.analyst[id] || {}).review || {};
+  return S.drafts[id] || (S.drafts[id] = { status: review.status || "OPEN", disposition: review.disposition || "", note: "",
+                                          noteText: "", question: "" });
+}
+
+// ---------------------------------------------------------------- routing
+// #case/CASE-S8-01 is the Overview tab and #case/CASE-S8-01/analyst the Analyst tab.
+function parseRoute() {
+  const m = location.hash.match(/^#case\/([^/]+)(\/analyst)?$/);
+  return m ? { kind: "case", id: decodeURIComponent(m[1]), tab: m[2] ? "analyst" : "overview" } : { kind: "replay" };
+}
+const caseHash = (id, tab) => `#case/${enc(id)}${tab === "analyst" ? "/analyst" : ""}`;
+// Each history entry remembers its position in history.state, so "Back to alerts" can return to the replay page's
+// own entry however the analyst has moved between tabs with the browser's back and forward buttons.
+let navIndex = 0;
+function trackHistory() {
+  if (history.state && typeof history.state.idx === "number") navIndex = history.state.idx;
+  else history.replaceState({ idx: ++navIndex }, "");
+}
+function onRoute() {
+  trackHistory();
+  const r = parseRoute();
+  const changed = r.kind !== S.route.kind || r.id !== S.route.id;
+  if (r.kind === "replay") S.replayIndex = navIndex;
+  S.route = r;
+  if (r.kind === "case") {
+    if (changed) loadDetail(r.id);
+    watchAi(r.id);
+    if (r.tab === "analyst") loadAnalyst(r.id);
+  }
+  render();
+  if (changed) window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", onRoute);
+function backToReplay(e) {
+  e.preventDefault();
+  if (S.replayIndex !== null && S.replayIndex < navIndex) history.go(S.replayIndex - navIndex);
+  else location.hash = "";
+}
+
+// ---------------------------------------------------------------- render
+function render() {
+  const app = $("#app");
+  const active = document.activeElement;
+  const focusKey = active && active.dataset ? active.dataset.key : null;
+  const scrolls = {};
+  app.querySelectorAll("[data-scroll]").forEach(el => (scrolls[el.dataset.scroll] = el.scrollTop));
+
+  app.replaceChildren(h("div", { class: "wrap" },
+    h("header", { class: "app-head" }, h("h1", {}, "AG-101 Agent Spend Monitor"),
+      liveStatus(),
+      h("span", { class: "sim" }, "Synthetic data · simulation only")),
+    S.error ? h("div", { class: "banner", role: "alert" }, h("span", { class: "spacer" }, S.error),
+      h("button", { class: "btn btn-sm", "data-key": "retry", onclick: retry }, "Retry"),
+      h("button", { class: "btn btn-sm", "data-key": "dismiss", onclick: () => { S.error = null; render(); } }, "Dismiss")) : null,
+    S.route.kind === "case" ? casePage(S.route.id) : replayPage()));
+
+  app.querySelectorAll("[data-scroll]").forEach(el => {
+    if (scrolls[el.dataset.scroll] !== undefined) el.scrollTop = scrolls[el.dataset.scroll];
+  });
+  if (focusKey) {
+    const el = app.querySelector(`[data-key="${CSS.escape(focusKey)}"]`);
+    if (el) {
+      el.focus({ preventScroll: true });
+      if (el.tagName === "TEXTAREA") el.selectionStart = el.selectionEnd = el.value.length;  // keep typing where it was
+    }
+  }
+}
+async function retry() {
+  S.error = null;
+  render();
+  try {
+    if (!S.scenarios.length) await loadScenarios();
+    await Promise.all([loadFeed(), loadOverview(), loadCases(), loadAlerts()]);
+    if (S.route.kind === "case") loadDetail(S.route.id);
+    if (S.route.kind === "case" && S.route.tab === "analyst") loadAnalyst(S.route.id);
+  } catch (e) { showError(e); }
+}
+
+// ---------------------------------------------------------------- dashboard
+function replayPage() {
+  return [S.notice ? h("div", { class: "notice", role: "status" }, S.notice) : null, ledgerCard()];
+}
+// One table, one row per payment: live payments from the simulator and every scenario's payments, newest first.
+// Card controls and agent monitoring keep their own columns; the Alert column links the alert the payment is part of.
+// Scenario alert details come from the latest replay, so opening one from another scenario first replays that
+// scenario instantly (with agent monitoring) and then opens it.
+// Order: the payment (ID, who, how much, which invoice, under which task), then the two separate checks, then the
+// alert and its review status, then when it happened.
+const ACTIVITY_COLUMNS = ["Txn", "Merchant", "Amount", "Reference", "Task", "Card controls", "Agent monitoring", "Alert", "Status", "Time"];
+const SORTABLE = { Amount: "amount", "Agent monitoring": "severity", Status: "status", Time: "time" };
+const STATUS_RANK = { OPEN: 5, IN_REVIEW: 4, ESCALATED: 3, REVIEWED: 2, DISMISSED: 1 };  // open first when descending
+const SEVERITY_RANK = { HIGH: 2, REVIEW: 1, NORMAL: 0 };
+function openAlert(e, a) {
+  if (a.live) return;  // the link's own hash change opens it
+  e.preventDefault();
+  if (S.running) return;
+  S.scenario = a.scenario_id;
+  S.mode = "controls_plus_monitoring";
+  S.notice = `Loading ${a.alert_ref}…`;
+  render();
+  runReplay({ delay: 0, then: () => { S.notice = null; location.hash = `#case/${enc(a.case_id)}`; } });
+}
+const classOf = p => (p.agent_monitoring ? p.agent_monitoring.classification : null);
+function ledgerRows() {
+  const seen = new Set();
+  return [...S.lv.payments, ...S.scenarioPayments].filter(p => !seen.has(p.txn_id) && seen.add(p.txn_id));
+}
+const alertIndex = () => new Map([...S.alerts, ...S.lv.cases].map(a => [a.case_id, a]));
+function sortRows(rows, alertOf) {
+  const { key, dir } = S.alertSort;
+  const value = { time: p => p.timestamp, amount: p => Number(p.amount),
+                  severity: p => (classOf(p) ? SEVERITY_RANK[classOf(p)] : -1),
+                  status: p => STATUS_RANK[(alertOf(p) || {}).status] || 0 }[key];
+  return [...rows].sort((x, y) => {
+    const vx = value(x), vy = value(y);
+    const c = vx < vy ? -1 : vx > vy ? 1 : x.timestamp.localeCompare(y.timestamp) || x.txn_id.localeCompare(y.txn_id);
+    return dir === "asc" ? c : -c;
+  });
+}
+function sortBy(key) {
+  S.alertSort = S.alertSort.key === key ? { key, dir: S.alertSort.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" };
+  render();
+}
+// "just now", "2 min ago", "3 hours ago", "3 days ago"; the exact UTC time is shown alongside.
+function ago(ts) {
+  const sec = Math.round((Date.now() - Date.parse(ts)) / 1000);
+  if (sec < 45) return "just now";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} ${pl(hr, "hour")} ago`;
+  const days = Math.round(hr / 24);
+  if (days < 30) return `${days} ${pl(days, "day")} ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months} ${pl(months, "month")} ago`;
+  const years = Math.round(days / 365);
+  return `${years} ${pl(years, "year")} ago`;
+}
+const whenCell = ts => h("td", { class: "time-cell nowrap", title: `${day(ts)} ${time(ts)} UTC` },
+  h("span", { class: "ago" }, ago(ts)), h("span", { class: "mono" }, `${day(ts)} ${hm(ts)} UTC`));
+function freshRow(key, ms = 2000) {
+  const seen = S.fresh.get(key), age = seen ? Date.now() - seen : Infinity;
+  return age < ms ? { class: "fresh", style: `animation-delay:-${age}ms` } : {};
+}
+function ledgerCard() {
+  const alerts = alertIndex(), all = ledgerRows();
+  const alertOf = p => (p.agent_monitoring && p.agent_monitoring.case_id ? alerts.get(p.agent_monitoring.case_id) : null);
+  const merchants = uniq(all.map(p => p.merchant)).sort();
+  if (S.alertMerchant !== "ALL" && !merchants.includes(S.alertMerchant)) S.alertMerchant = "ALL";
+  const byMerchant = all.filter(p => S.alertMerchant === "ALL" || p.merchant === S.alertMerchant);
+  const match = { ALL: () => true, HIGH: p => classOf(p) === "HIGH", REVIEW: p => classOf(p) === "REVIEW",
+                  OPEN: p => (alertOf(p) || {}).status === "OPEN" };
+  const shown = sortRows(byMerchant.filter(match[S.alertFilter]), alertOf);
+  const count = key => byMerchant.filter(match[key]).length;
+  const head = label => {
+    const key = SORTABLE[label];
+    const cls = [label === "Amount" ? "r" : null, ["Card controls", "Agent monitoring"].includes(label) ? "layer" : null]
+      .filter(Boolean).join(" ") || null;
+    if (!key) return h("th", { class: cls, scope: "col" }, label);
+    const active = S.alertSort.key === key;
+    return h("th", { class: cls, scope: "col", "aria-sort": active ? (S.alertSort.dir === "asc" ? "ascending" : "descending") : "none" },
+      h("button", { class: "sort", "data-key": `sort-${key}`, onclick: () => sortBy(key) }, label,
+        h("span", { class: "sort-mark", "aria-hidden": "true" }, active ? (S.alertSort.dir === "asc" ? "▲" : "▼") : "↕")));
+  };
+  const live = all.filter(p => p.scenario_id === "L").length;
+  return h("section", { class: "card", "aria-label": "Payments and alerts" },
+    h("div", { class: "card-head" },
+      h("h2", { class: "title" }, "Payments and alerts"),
+      all.length ? h("span", { class: "muted head-note" },
+        `${all.length} ${pl(all.length, "payment")} · ${alerts.size} ${pl(alerts.size, "alert")} · card controls and agent monitoring shown separately`) : null,
+      all.length ? h("div", { class: "filters" },
+        h("div", { class: "chip-row", role: "group", "aria-label": "Filter payments" },
+          [["ALL", "All"], ["HIGH", "High"], ["REVIEW", "Review"], ["OPEN", "Open alerts"]].map(([key, label]) =>
+            h("button", { class: "fchip", "aria-pressed": String(S.alertFilter === key), "data-key": `filter-${key}`,
+                          onclick: () => { S.alertFilter = key; render(); } }, `${label} `, h("span", { class: "n" }, count(key))))),
+        h("label", { class: "merchant-filter" }, h("span", { class: "field-label" }, "Merchant"),
+          h("select", { class: "select select-sm", "data-key": "merchant-filter", onchange: e => { S.alertMerchant = e.target.value; render(); } },
+            h("option", { value: "ALL", selected: S.alertMerchant === "ALL" }, "All merchants"),
+            merchants.map(m => h("option", { value: m, selected: S.alertMerchant === m }, m))))) : null),
+    !all.length ? h("p", { class: "muted" }, "Loading payments…")
+    : !shown.length ? h("p", { class: "muted" }, "No payments match these filters.")
+    : h("div", { class: "scroll activity-scroll", "data-scroll": "activity" }, h("table", { class: "activity-table" },
+        h("thead", {}, h("tr", {}, ACTIVITY_COLUMNS.map(head))),
+        h("tbody", {}, shown.map(p => ledgerRow(p, alertOf(p)))))),
+    all.length ? h("p", { class: "summary" }, ledgerSummary(all, alerts, live)) : null);
+}
+function ledgerRow(p, a) {
+  const m = p.agent_monitoring, cc = p.card_controls;
+  const fresh = Object.keys(freshRow(p.txn_id, 1600)).length ? freshRow(p.txn_id, 1600) : a ? freshRow(`alert:${a.case_id}`) : {};
+  return h("tr", fresh,
+    h("td", { class: "mono nowrap" }, p.txn_id),
+    h("td", { class: "nowrap" }, p.merchant),
+    h("td", { class: "r nowrap" }, gbp(p.amount)),
+    h("td", { class: "mono nowrap" }, p.reference),
+    h("td", { class: "mono nowrap" }, p.task_id || h("span", { class: "muted" }, "—")),
+    h("td", { class: "layer" }, pill(cc.decision),
+      cc.rule_triggered ? h("span", { class: "rule" }, RULE_LABEL[cc.rule_triggered] || cc.rule_triggered) : null),
+    h("td", { class: "layer" }, m ? [pill(m.classification), m.signals.length ? h("div", { class: "chips" }, m.signals.map(signalChip)) : null]
+                                 : h("span", { class: "muted" }, "Not running")),
+    h("td", {}, a ? [h("a", { class: "case-link", href: `#case/${enc(a.case_id)}`, "data-key": `alert-${a.case_id}-${p.txn_id}`,
+                              onclick: e => openAlert(e, a) }, a.alert_ref),
+                     h("span", { class: "reason-sub nowrap" }, CASE_TYPE[a.case_type] || a.case_type)]
+                  : h("span", { class: "muted" }, "—")),
+    h("td", {}, a ? pill(a.status) : h("span", { class: "muted" }, "—")),
+    whenCell(p.timestamp));
+}
+function ledgerSummary(rows, alerts, live) {
+  const approved = rows.filter(p => p.card_controls.decision === "APPROVED").length;
+  const declined = rows.length - approved;
+  return `${rows.length} ${pl(rows.length, "payment")} (${live} live) · Card controls: ${approved} approved` +
+    `${declined ? ` · ${declined} declined` : ""} · Agent monitoring: ${alerts.size} ${pl(alerts.size, "alert")}`;
+}
+function paymentHead() {
+  return h("tr", {}, h("th", {}, "Time"), h("th", {}, "Txn"), h("th", {}, "Merchant"), h("th", { class: "r" }, "Amount"),
+    h("th", {}, "Task"), h("th", {}, "Reference"), h("th", { class: "layer" }, "Card controls"), h("th", { class: "layer" }, "Agent monitoring"),
+    h("th", {}, "Case"));
+}
+function paymentRow(t, highlight) {
+  const seen = S.fresh.get(t.txn_id), age = seen ? Date.now() - seen : Infinity;
+  const fresh = highlight && age < 1600;
+  const m = t.agent_monitoring, cc = t.card_controls;
+  return h("tr", { class: fresh ? "fresh" : null, style: fresh ? `animation-delay:-${age}ms` : null },
+    whenCell(t.timestamp),
+    h("td", { class: "mono nowrap" }, t.txn_id),
+    h("td", { class: "nowrap" }, t.merchant),
+    h("td", { class: "r nowrap" }, gbp(t.amount)),
+    h("td", { class: "mono nowrap" }, t.task_id || h("span", { class: "muted" }, "—")),
+    h("td", { class: "mono nowrap" }, t.reference),
+    h("td", { class: "layer" }, pill(cc.decision),
+      cc.rule_triggered ? h("span", { class: "rule" }, RULE_LABEL[cc.rule_triggered] || cc.rule_triggered) : null),
+    h("td", { class: "layer" }, m ? [pill(m.classification), m.signals.length ? h("div", { class: "chips" }, m.signals.map(signalChip)) : null]
+                                 : h("span", { class: "muted" }, "Not running")),
+    h("td", {}, m && m.case_id ? caseLink(m.case_id) : null));
+}
+
+// ---------------------------------------------------------------- live mode
+// Live mode follows the server's live session: the simulator page makes tasks and payments, and every step is
+// pushed here over /api/live/events. EventSource reconnects by itself; state is re-read on every (re)connect.
+function liveStatus() {
+  const connected = S.lv.status === "connected";
+  return h("span", { class: `live-pill ${connected ? "on" : "wait"}`, role: "status" }, h("span", { class: "dot" }),
+    connected ? "Live · connected" : "Reconnecting…",
+    h("a", { href: "/simulator", target: "simulator", class: "sim-link" }, "Open simulator ↗"));
+}
+const asLiveAlert = c => Object.assign(c, { live: true });
+async function loadLiveState() {
+  try {
+    const st = await api("/api/live/state");
+    Object.assign(S.lv, { tasks: st.tasks, payments: st.payments, cases: st.cases.map(asLiveAlert), totals: st.totals });
+  } catch (e) { /* the banner shows when offline */ }
+  render();
+}
+let liveRefresh = null;
+function refreshLiveSoon() {  // totals and task usage, once a burst of events settles
+  clearTimeout(liveRefresh);
+  liveRefresh = setTimeout(loadLiveState, 250);
+}
+function upsertLiveAlert(c) {
+  const i = S.lv.cases.findIndex(x => x.case_id === c.case_id);
+  if (i >= 0) S.lv.cases[i] = asLiveAlert(Object.assign({}, S.lv.cases[i], c));
+  else S.lv.cases.unshift(asLiveAlert(c));
+  S.fresh.set(`alert:${c.case_id}`, Date.now());
+}
+function connectLive() {
+  if (S.lv.source) return;
+  S.lv.status = "connecting";
+  const src = new EventSource("/api/live/events");
+  S.lv.source = src;
+  src.onopen = () => { S.lv.status = "connected"; loadLiveState(); };
+  src.onerror = () => { if (S.lv.source === src) { S.lv.status = "reconnecting"; render(); } };
+  const on = (name, fn) => src.addEventListener(name, e => { fn(JSON.parse(e.data)); render(); });
+  on("payment", ({ event }) => {
+    S.lv.payments = [event, ...S.lv.payments.filter(p => p.txn_id !== event.txn_id)].slice(0, 50);
+    S.fresh.set(event.txn_id, Date.now());
+    refreshLiveSoon();
+  });
+  on("alert_opened", ({ case: c }) => { upsertLiveAlert(c); toast(c); refreshLiveSoon(); });
+  on("alert_updated", ({ case: c }) => {
+    upsertLiveAlert(c);
+    if (S.route.kind === "case" && S.route.id === c.case_id) loadDetail(c.case_id);
+    refreshLiveSoon();
+  });
+  on("ai_ready", ({ case_id }) => {
+    if (S.route.kind !== "case" || S.route.id !== case_id) return;
+    delete S.ai[case_id];
+    watchAi(case_id);
+    loadDetail(case_id);
+    if (S.route.tab === "analyst") loadAnalyst(case_id);
+  });
+  on("task_created", () => refreshLiveSoon());
+  on("reset", () => {
+    Object.assign(S.lv, { tasks: [], payments: [], cases: [], totals: null });
+    loadLiveState();
+  });
+}
+function toast(c) {
+  const host = $("#toasts");
+  const close = () => { el.classList.add("out"); setTimeout(() => el.remove(), 200); };
+  const el = h("div", { class: `toast toast-${c.severity}`, role: "status" },
+    h("div", { class: "toast-top" }, pill(c.severity), h("strong", {}, `New alert · ${c.alert_ref}`),
+      h("button", { class: "toast-x", "aria-label": "Dismiss", onclick: close }, "×")),
+    h("p", {}, c.reason),
+    h("button", { class: "btn btn-sm", onclick: () => { location.hash = `#case/${enc(c.case_id)}`; close(); } }, "View"));
+  host.prepend(el);
+  while (host.children.length > 4) host.lastElementChild.remove();
+  setTimeout(close, 6000);
+}
+
+// ---------------------------------------------------------------- case detail page
+const STATUSES = [["OPEN", "Open"], ["IN_REVIEW", "In review"], ["REVIEWED", "Reviewed"], ["ESCALATED", "Escalated"],
+                  ["DISMISSED", "Dismissed"]];
+const DISPOSITION_REQUIRED = ["REVIEWED", "ESCALATED", "DISMISSED"];
+const NOTE_REQUIRED = ["ESCALATED", "DISMISSED"];
+const NOTE_MIN = 10, NOTE_MAX = 1000, QUESTION_MAX = 300;
+const AI_FOOTER = "AI text explains the case; it does not affect classification.";
+const ICONS = {
+  sparkle: '<path d="M8 1.5l1.4 4.1 4.1 1.4-4.1 1.4L8 12.5 6.6 8.4 2.5 7l4.1-1.4z"/><path d="M13 11.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/>',
+  flag: '<path d="M3.5 14.5V2"/><path d="M3.5 2.5h8l-1.6 3 1.6 3h-8"/>',
+  swap: '<path d="M2.5 5.5h10l-2.5-2.5M13.5 10.5h-10l2.5 2.5"/>',
+  note: '<path d="M3 2.5h7l3 3v8H3z"/><path d="M5.5 8h5M5.5 10.5h3.5"/>',
+  check: '<rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M5.2 8.2l1.9 1.9 3.8-4"/>',
+  chat: '<path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/>',
+};
+function icon(name) {
+  const s = h("span", { class: `ic ic-${name}`, "aria-hidden": "true" });
+  s.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+  return s;
+}
+const fmtAt = at => `${day(at)} ${time(at)} UTC`;
+const statusLabel = s => (STATUSES.find(x => x[0] === s) || [s, s.replace(/_/g, " ")])[1];
+// Groq sometimes names the internal case_id; show the alert reference in its place.
+const shownText = (id, t) => t.split(id).join(refOf(id));
+
+function casePage(id) {
+  const back = h("a", { class: "back", href: "#", "data-key": "back", onclick: backToReplay }, "← Back to alerts");
+  const d = S.details[id];
+  if (!d) {
+    return [back, h("section", { class: "card" }, S.missing.has(id)
+      ? [h("h2", { class: "title" }, "Case not found"),
+         h("p", {}, `${refOf(id)} isn’t part of the current run. A reset or a new replay may have cleared it.`)]
+      : h("div", { "aria-busy": "true" }, h("div", { class: "skel", style: "width:30%;height:18px" }),
+          h("div", { class: "skel", style: "width:70%;height:24px" }), h("div", { class: "skel", style: "width:50%" })))];
+  }
+  const c = d.case, tab = S.route.tab;
+  const tabBtn = (key, label) => h("a", { class: "tab", role: "tab", href: caseHash(id, key), "aria-selected": String(tab === key),
+                                         "data-key": `tab-${key}` }, label);
+  return [back,
+    h("section", { class: "card case-head" },
+      h("div", { class: "d-head" }, h("h2", {}, c.alert_ref || refOf(id)), pill(c.severity),
+        h("span", { class: "chip" }, CASE_TYPE[c.case_type] || c.case_type), pill(c.status),
+        h("span", { class: "d-meta", title: fmtAt(c.opened_at) }, `Opened ${ago(c.opened_at)} · `, h("span", { class: "mono" }, fmtAt(c.opened_at)))),
+      h("p", { class: "reason" }, c.reason),
+      h("nav", { class: "tabs", role: "tablist", "aria-label": "Case sections" }, tabBtn("overview", "Overview"), tabBtn("analyst", "Analyst"))),
+    tab === "analyst" ? analystTab(id, d) : overviewTab(id, d)];
+}
+
+// ---------------------------------------------------------------- Overview tab
+function overviewTab(id, d) {
+  return h("div", { class: "tab-panel", role: "tabpanel", "aria-label": "Overview" },
+    aiBox(id),
+    h("div", { class: "grid-2" },
+      h("section", { class: "card" }, h("h2", { class: "title" }, "Authorised task vs actual activity"), taskCompare(d)),
+      h("section", { class: "card" }, h("h2", { class: "title" }, "Signals"),
+        h("div", { class: "signals" }, d.signals.map(s => h("div", { class: "signal" }, signalChip(s.code), h("span", {}, s.description)))))),
+    h("section", { class: "card" }, h("h2", { class: "title" }, "Payments in this case"),
+      h("div", { class: "scroll free" }, h("table", {}, h("thead", {}, paymentHead()),
+        h("tbody", {}, d.actual_activity.map(t => paymentRow(t, false)))))),
+    h("div", { class: "grid-2" },
+      h("section", { class: "card" }, h("h2", { class: "title" }, "Evidence"), evidence(id, d)),
+      h("section", { class: "card" }, h("h2", { class: "title" }, "Recommended action"),
+        h("div", { class: "rec" }, d.recommended_action),
+        h("p", { class: "review-note" }, "Advisory. Record a review decision, checklist and notes in the ",
+          h("a", { href: caseHash(id, "analyst"), "data-key": "to-analyst" }, "Analyst tab"), "."))));
+}
+function aiLabel() {
+  return h("div", { class: "ai-label" }, icon("sparkle"), "AI-generated");
+}
+function aiBox(id) {
+  const v = S.ai[id];
+  let body;
+  if (v && v.summary) {
+    body = [h("p", { class: "ai-text" }, shownText(id, v.summary.text)),
+      v.summary.key_points.length ? h("ul", {}, v.summary.key_points.slice(0, 3).map(k => h("li", {}, shownText(id, k)))) : null];
+  } else if (v && v.ai_status === "failed") {
+    body = h("div", { class: "ai-failed" }, h("span", {}, `AI summary couldn’t be generated (${FALLBACK[v.fallback_reason] || v.fallback_reason})`),
+      h("button", { class: "btn btn-sm", "data-key": "ai-retry", onclick: () => retryAi(id) }, "Retry"));
+  } else {
+    body = h("div", { "aria-busy": "true" }, h("p", { class: "ai-text muted" }, "Generating summary…"),
+      h("div", { class: "skel" }), h("div", { class: "skel", style: "width:88%" }), h("div", { class: "skel", style: "width:60%" }));
+  }
+  return h("section", { class: "ai", "aria-live": "polite", "aria-label": "AI summary" },
+    aiLabel(), body, h("p", { class: "ai-note" }, AI_FOOTER));
+}
+
+// ---------------------------------------------------------------- Analyst tab
+function analystTab(id, d) {
+  const a = S.analyst[id], msg = S.analystMsg[id];
+  const panel = (...kids) => h("div", { class: "tab-panel", role: "tabpanel", "aria-label": "Analyst" }, kids);
+  if (!a) {
+    return panel(msg ? h("div", { class: "notice", role: "status" }, msg)
+      : h("section", { class: "card", "aria-busy": "true" }, h("div", { class: "skel", style: "width:40%" }), h("div", { class: "skel" })));
+  }
+  return panel(
+    msg ? h("div", { class: "notice", role: "status" }, msg) : null,
+    h("div", { class: "analyst" },
+      h("div", { class: "col" }, reviewCard(id, a), checklistCard(id, a), askCard(id, a), notesCard(id, a)),
+      h("div", { class: "col" }, activityCard(a), factsCard(d))));
+}
+function reviewCard(id, a) {
+  const dr = draft(id);
+  const needsDisposition = DISPOSITION_REQUIRED.includes(dr.status), needsNote = NOTE_REQUIRED.includes(dr.status);
+  const note = (dr.note || "").trim();
+  const problem = needsDisposition && !dr.disposition ? "Choose a disposition."
+    : needsNote && note.length < NOTE_MIN ? `Add a note of at least ${NOTE_MIN} characters.`
+    : note.length > NOTE_MAX ? `Keep the note to ${NOTE_MAX} characters.` : null;
+  const unchanged = dr.status === a.review.status && (dr.disposition || "") === (a.review.disposition || "") && !note;
+  const set = patch => { Object.assign(dr, patch, { saved: false, touched: true }); render(); };
+  const sug = S.suggest[id] || {};
+  return h("section", { class: "card", "aria-label": "Review decision" },
+    h("div", { class: "card-head" }, h("h2", { class: "title" }, "Review decision"),
+      h("button", { class: "btn btn-sm ai-btn", "data-key": "suggest", disabled: sug.pending || S.running, onclick: () => suggestReview(id) },
+        icon("sparkle"), sug.result ? "Refresh AI recommendation" : "Get AI recommendation")),
+    suggestionBanner(id, dr, sug, a),
+    h("div", { class: "field-label" }, "Status", aiTag(dr, sug, "status")),
+    h("div", { class: "seg-status", role: "radiogroup", "aria-label": "Status" },
+      STATUSES.map(([value, label]) => h("button", { role: "radio", "aria-checked": String(dr.status === value), "data-key": `st-${value}`,
+                                                    onclick: () => set({ status: value }) }, label))),
+    h("label", { class: "field stack" },
+      h("span", { class: "field-label" }, "Disposition", needsDisposition ? h("span", { class: "req" }, " · required") : null,
+        aiTag(dr, sug, "disposition")),
+      h("select", { class: "select", "data-key": "disposition", onchange: e => set({ disposition: e.target.value }) },
+        h("option", { value: "", selected: !dr.disposition }, "Choose…"),
+        Object.entries(a.dispositions).map(([value, label]) => h("option", { value, selected: dr.disposition === value }, label)))),
+    h("label", { class: "field stack" },
+      h("span", { class: "field-label" }, "Note", needsNote ? h("span", { class: "req" }, ` · required, at least ${NOTE_MIN} characters`) : null,
+        aiTag(dr, sug, "note")),
+      h("textarea", { class: "textarea", rows: 3, maxlength: NOTE_MAX, "data-key": "review-note",
+                      oninput: e => { dr.note = e.target.value; dr.saved = false; dr.touched = true; refreshReviewButton(id); } }, dr.note || "")),
+    h("div", { class: "row" },
+      h("button", { class: "btn btn-primary", "data-key": "save-review", disabled: S.running || !!problem || unchanged,
+                    onclick: () => saveReview(id) }, "Save decision"),
+      h("span", { class: "hint", "data-key": "review-hint" }, dr.saved ? "Saved." : problem || "")),
+    h("p", { class: "review-note" }, "Updates the review record only. Card payments are not affected."));
+}
+// Marks a form field whose value still matches the AI recommendation.
+function aiTag(dr, sug, field) {
+  if (!dr.aiFilled || !sug.result) return null;
+  const value = field === "note" ? (dr.note || "").trim() : dr[field] || "";
+  return value && value === (sug.result[field] || "") ? h("span", { class: "ai-tag" }, icon("sparkle"), "AI-filled") : null;
+}
+function suggestionBanner(id, dr, sug, a) {
+  if (sug.pending) {
+    return h("div", { class: "ai suggestion", "aria-busy": "true" }, h("p", { class: "ai-text muted" }, "AI recommendation: filling in this form…"),
+      h("div", { class: "skel", style: "width:70%" }));
+  }
+  if (sug.error || sug.fallback) {
+    return h("div", { class: "notice suggestion-msg", role: "status" },
+      sug.error || `AI couldn’t recommend a decision (${FALLBACK[sug.fallback] || sug.fallback}). Fill in the form yourself or try again.`);
+  }
+  if (!sug.result || !dr.aiFilled) return null;
+  const r = sug.result;
+  return h("div", { class: "ai suggestion", role: "status" },
+    h("div", { class: "ai-label" }, icon("sparkle"), h("strong", {}, "AI recommendation")),
+    h("p", { class: "ai-text" }, h("strong", {}, `${statusLabel(r.status)} · ${a.dispositions[r.disposition] || r.disposition}. `),
+      shownText(id, r.rationale)),
+    h("p", { class: "ai-note" }, "AI filled in the status, disposition and note below. Check them and change anything before saving; ",
+      "nothing is saved until you press Save decision. ",
+      a.review.status !== "OPEN" ? `Currently saved: ${statusLabel(a.review.status)}. ` : null,
+      h("button", { class: "link-btn", "data-key": "clear-suggestion", onclick: () => clearSuggestion(id) }, "Clear")));
+}
+// Re-check the form as the note is typed without re-rendering (which would move the caret).
+function refreshReviewButton(id) {
+  const dr = draft(id), a = S.analyst[id], note = (dr.note || "").trim();
+  const problem = DISPOSITION_REQUIRED.includes(dr.status) && !dr.disposition ? "Choose a disposition."
+    : NOTE_REQUIRED.includes(dr.status) && note.length < NOTE_MIN ? `Add a note of at least ${NOTE_MIN} characters.` : null;
+  const unchanged = dr.status === a.review.status && (dr.disposition || "") === (a.review.disposition || "") && !note;
+  const btn = $("[data-key=save-review]"), hint = $("[data-key=review-hint]");
+  if (btn) btn.disabled = S.running || !!problem || unchanged;
+  if (hint) hint.textContent = problem || "";
+}
+function checklistCard(id, a) {
+  const done = a.checklist.filter(i => i.checked).length;
+  return h("section", { class: "card", "aria-label": "Review checklist" },
+    h("div", { class: "card-head" }, h("h2", { class: "title" }, "Review checklist"),
+      h("span", { class: "muted head-note" }, `${done} of ${a.checklist.length} complete`)),
+    h("ul", { class: "checklist" }, a.checklist.map(item => h("li", {},
+      h("label", {}, h("input", { type: "checkbox", checked: item.checked, "data-key": `chk-${item.item_id}`,
+                                  onchange: e => analystPost(id, "/checklist", { item_id: item.item_id, checked: e.target.checked }) }),
+        h("span", {}, item.text))))),
+    h("p", { class: "review-note" }, "Generated from the case’s signals by fixed rules, not by AI."));
+}
+function askCard(id, a) {
+  const dr = draft(id), thread = S.qa[id] || [];
+  const busy = thread.some(q => q.pending);
+  return h("section", { class: "card", "aria-label": "Ask AI about this alert" },
+    h("h2", { class: "title" }, "Ask AI about this alert"),
+    h("div", { class: "suggest" }, a.suggested_questions.map((q, i) =>
+      h("button", { class: "fchip", "data-key": `sq-${i}`, disabled: busy, onclick: () => askAi(id, q) }, q))),
+    thread.length ? h("ol", { class: "thread" }, thread.map((q, i) => h("li", {},
+      h("p", { class: "q" }, q.question),
+      q.pending ? h("div", { class: "a", "aria-busy": "true" }, h("p", { class: "muted" }, "Thinking…"), h("div", { class: "skel", style: "width:80%" }))
+      : q.error ? h("p", { class: "a review-msg" }, q.error)
+      : q.fallback_reason ? h("div", { class: "a" }, h("p", {}, `AI couldn’t answer (${FALLBACK[q.fallback_reason] || q.fallback_reason}).`),
+          h("button", { class: "btn btn-sm", "data-key": `qa-retry-${i}`, onclick: () => askAi(id, q.question) }, "Ask again"))
+      : h("div", { class: "a ai" }, aiLabel(), h("p", { class: "ai-text" }, shownText(id, q.answer)),
+          h("div", { class: "a-foot" }, h("span", { class: "ai-note" }, AI_FOOTER),
+            h("button", { class: "btn btn-sm", "data-key": `qa-note-${i}`, disabled: q.noted,
+                          onclick: async () => { if (await addNote(id, shownText(id, q.answer), "ai_answer")) { q.noted = true; render(); } } },
+              q.noted ? "Added to notes" : "Add to notes"))))))
+      : null,
+    h("div", { class: "ask-row" },
+      h("textarea", { class: "textarea", rows: 2, maxlength: QUESTION_MAX, placeholder: "Ask a question about this alert…",
+                      "aria-label": "Your question", "data-key": "question", oninput: e => { dr.question = e.target.value; } }, dr.question || ""),
+      h("button", { class: "btn", "data-key": "ask", disabled: busy, onclick: () => askAi(id, dr.question || "") }, "Ask")),
+    h("p", { class: "review-note" }, `Up to ${QUESTION_MAX} characters. Answers use only this case’s data.`));
+}
+function notesCard(id, a) {
+  const dr = draft(id);
+  return h("section", { class: "card", "aria-label": "Notes" },
+    h("h2", { class: "title" }, "Notes"),
+    h("div", { class: "ask-row" },
+      h("textarea", { class: "textarea", rows: 2, maxlength: NOTE_MAX, placeholder: "Add a note…", "aria-label": "New note",
+                      "data-key": "note-text", oninput: e => { dr.noteText = e.target.value; } }, dr.noteText || ""),
+      h("button", { class: "btn", "data-key": "add-note", onclick: () => (dr.noteText || "").trim() && addNote(id, dr.noteText.trim()) }, "Add note")),
+    a.notes.length ? h("ul", { class: "notes" }, a.notes.map(n => h("li", {},
+      h("div", { class: "note-meta" }, h("span", { class: "mono" }, fmtAt(n.created_at)), " · ", n.author,
+        n.source === "ai_answer" ? h("span", { class: "chip from-ai" }, icon("sparkle"), "From AI answer")
+        : n.source === "ai_suggestion" ? h("span", { class: "chip from-ai" }, icon("sparkle"), "AI-drafted, saved by analyst") : null),
+      h("p", {}, n.text))))
+    : h("p", { class: "muted" }, "No notes yet."));
+}
+const ACTIVITY = {
+  case_opened: ["flag", "Case opened"], ai_summary: ["sparkle", "AI summary generated"], status_changed: ["swap", "Status changed"],
+  note_added: ["note", "Note added"], checklist: ["check", "Checklist"], ai_question: ["chat", "AI question asked"],
+  ai_suggestion: ["sparkle", "AI recommendation"],
+};
+function activityDetail(a) {
+  if (a.kind === "ai_suggestion") return a.detail.replace(/^[A-Z_]+/, m => statusLabel(m));
+  if (a.kind === "status_changed") {
+    return a.detail.replace(/[A-Z_]+(?= →)|(?<=→ )[A-Z_]+/g, m => statusLabel(m));
+  }
+  return a.kind === "case_opened" || a.kind === "ai_summary" ? null : a.detail;
+}
+function activityCard(a) {
+  return h("section", { class: "card", "aria-label": "Activity" },
+    h("h2", { class: "title" }, "Activity"),
+    h("ol", { class: "activity" }, a.activity.map(x => {
+      const [ic, label] = ACTIVITY[x.kind] || ["note", x.kind];
+      const detail = activityDetail(x);
+      return h("li", { class: `act act-${x.kind}` }, icon(ic),
+        h("div", {}, h("div", { class: "act-top" }, h("strong", {}, label), h("span", { class: "mono muted" }, fmtAt(x.at))),
+          detail ? h("p", { class: "act-detail" }, detail) : null));
+    })),
+    h("p", { class: "review-note" }, "Analyst actions use real time; the case itself comes from the simulated replay."));
+}
+function factsCard(d) {
+  const c = d.case;
+  const fact = (k, v, mono) => [h("dt", {}, k), h("dd", { class: mono ? "mono" : null }, v)];
+  return h("section", { class: "card", "aria-label": "Alert facts" },
+    h("h2", { class: "title" }, "Alert facts"),
+    h("dl", { class: "facts" },
+      fact("Agent", c.agent_id, true), fact("Merchant", c.merchant || "—"), fact("Amount", gbp(c.total_amount)),
+      fact("Payments", c.txn_count), fact("Rule", CASE_TYPE[c.case_type] || c.case_type), fact("Task", c.task_id || "None linked", true)));
+}
+function taskCompare(d) {
+  const task = d.authorised_task, acts = d.actual_activity, n = acts.length;
+  const mm = new Set(d.mismatched_fields);
+  const merchants = uniq(acts.map(a => a.merchant)).join(", ");
+  const amounts = uniq(acts.map(a => a.amount));
+  const amountText = n === 1 ? gbp(acts[0].amount) : amounts.length === 1 ? `${n} × ${gbp(amounts[0])}` : acts.map(a => gbp(a.amount)).join(", ");
+  const refs = uniq(acts.map(a => a.reference)).join(", ");
+  const when = !n ? "—" : n === 1 ? `${day(acts[0].timestamp)} ${hm(acts[0].timestamp)}`
+    : `${day(acts[0].timestamp)} ${hm(acts[0].timestamp)}–${hm(acts[n - 1].timestamp)}`;
+  if (!task) {
+    return [h("div", { class: "no-task" }, h("strong", {}, "No verified owner task linked"),
+        h("p", { class: "muted", style: "margin-top:4px" }, "Monitoring can’t confirm what the owner authorised for this payment.")),
+      h("table", { class: "cmp", style: "margin-top:12px" }, h("tbody", {},
+        [["Merchant", merchants], ["Amount", amountText], ["Payments", `${n} made`], ["Reference", refs], ["Time (UTC)", when]]
+          .map(([k, v]) => h("tr", {}, h("td", {}, k), h("td", { class: "mono" }, v)))))];
+  }
+  const rows = [
+    ["Merchant", task.approved_merchant, merchants, mm.has("approved_merchant")],
+    ["Max per payment", gbp(task.max_amount_per_payment), amountText, mm.has("max_amount_per_payment")],
+    ["Payments", `${task.permitted_payment_count} permitted`, `${n} made`, mm.has("permitted_payment_count")],
+    ["Reference", task.reference, refs, mm.has("reference")],
+    ["Window (UTC)", `${day(task.valid_from)} ${hm(task.valid_from)}–${hm(task.valid_to)}`, when, mm.has("valid_from") || mm.has("valid_to")],
+    ["Verified source", task.verified_source ? "Yes (simulated)" : "No", "—", mm.has("verified_source")],
+  ];
+  return h("table", { class: "cmp" },
+    h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, `Authorised task `, h("span", { class: "mono nowrap" }, task.task_id)),
+      h("th", {}, "Actual activity"))),
+    h("tbody", {}, rows.map(([k, auth, actual, bad]) => h("tr", {},
+      h("td", {}, k), h("td", { class: bad ? "mm" : null }, auth), h("td", { class: bad ? "mm" : null }, actual)))));
+}
+function evidence(id, d) {
+  if (!d.evidence.length) return h("p", { class: "muted" }, "No evidence linked.");
+  const v = S.ai[id];
+  const byAction = {};
+  ((v && v.external_assessments) || []).forEach(x => (byAction[x.action_id] = x));
+  return h("ol", { class: "timeline" }, d.evidence.map(e => {
+    const [label, cls] = SOURCE[e.source_type] || [e.source_type, ""];
+    let chip = null;
+    if (e.source_type === "external") {
+      const a = byAction[e.action_id];
+      chip = h("div", { class: "ai-chip" }, a
+        ? [h("strong", {}, `AI assessment: ${ASSESSMENT[a.assessment] || a.assessment}`), h("div", {}, a.rationale),
+           h("div", { class: "by" }, "AI-generated · supporting context only")]
+        : h("span", { class: "muted" }, v && v.ai_status !== "pending" ? "AI assessment unavailable." : "AI assessment generating…"));
+    }
+    return h("li", {},
+      h("div", { class: "ev-top" }, h("span", { class: "mono muted" }, `${day(e.timestamp)} ${time(e.timestamp)}`),
+        h("span", { class: `src ${cls}` }, label)),
+      h("div", { class: "ev-quote" }, `“${e.excerpt}”`),
+      h("div", { class: "ev-label" }, evidenceLabel(e.evidence_label)),
+      chip);
+  }));
+}
+
+// ---------------------------------------------------------------- boot
+// Relative times ("2 min ago") move on by themselves; skipped on case pages and while a dropdown is in use.
+setInterval(() => {
+  if (S.route.kind !== "case" && !(document.activeElement && document.activeElement.tagName === "SELECT")) render();
+}, 30000);
+
+async function boot() {
+  connectLive();  // live payments and alerts join the dashboard as they happen
+  if (!history.state || typeof history.state.idx !== "number") history.replaceState({ idx: 0 }, "");
+  render();
+  try {
+    await loadScenarios();
+    await Promise.all([loadFeed(), loadOverview(), loadCases(), loadAlerts()]);
+  } catch (e) {
+    showError(e);
+  }
+  onRoute();
+}
+boot();
+</script>
+</body>
+</html>

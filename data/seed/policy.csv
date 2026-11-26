@@ -1,0 +1,2 @@
+agent_id,agent_name,currency,max_per_payment,daily_cap,hourly_count_limit
+AG-101,Software Procurement,GBP,100.00,500.00,20

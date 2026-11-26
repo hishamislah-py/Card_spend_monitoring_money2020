@@ -1,0 +1,9 @@
+<meta name="color-scheme" content="dark light" />
+<script>
+  (function () {
+    var pref = 'system';
+    try { var v = localStorage.getItem('ds-theme'); if (v === 'light' || v === 'dark') pref = v; } catch (e) {}
+    var light = pref === 'light' || (pref === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
+    document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+  })();
+</script>
